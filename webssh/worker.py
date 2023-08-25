@@ -104,6 +104,9 @@ class Worker(object):
     def clear_queue(self):
         self._queue_message = ""
 
+    def backspace(self):
+        self._queue_message = self._queue_message[:-1]
+
     def on_flush(self):
         if len(self._queue_message) > 0:
             print("Message received " + self._queue_message)

@@ -590,11 +590,11 @@ class WsockHandler(MixinHandler, tornado.websocket.WebSocketHandler):
                 worker.chan.resize_pty(*resize)
             except (TypeError, struct.error, paramiko.SSHException):
                 pass
-
         data = msg.get('data')
         if data and isinstance(data, UnicodeType):
-            
-            if data.endswith("\r"):
+            if ('7f' == data.encode("utf-8").hex()):
+                worker.backspace()
+            elif data.endswith("\r"):
                 worker.on_flush()
                 worker.clear_queue()
             elif "\\t" in message:
@@ -607,6 +607,8 @@ class WsockHandler(MixinHandler, tornado.websocket.WebSocketHandler):
                 worker.append_queue(data)
             worker.data_to_dst.append(data)
             worker.on_write()
+        else:
+            print("backspace?")
 
     def on_close(self):
         logging.info('Disconnected from {}:{}'.format(*self.src_addr))
