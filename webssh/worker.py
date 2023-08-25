@@ -46,6 +46,8 @@ class Worker(object):
         self.handler = None
         self.mode = IOLoop.READ
         self.closed = False
+        self._queue_message = ""
+        self._append_tab = False
 
     def __call__(self, fd, events):
         if events & IOLoop.READ:
@@ -74,6 +76,9 @@ class Worker(object):
         logging.debug('worker {} on read'.format(self.id))
         try:
             data = self.chan.recv(BUF_SIZE)
+            if self._append_tab:
+                self.append_queue(data.decode("utf-8"))
+                self._append_tab=False
         except (OSError, IOError) as e:
             logging.error(e)
             if self.chan.closed or errno_from_exception(e) in _ERRNO_CONNRESET:
@@ -90,6 +95,19 @@ class Worker(object):
             except tornado.websocket.WebSocketClosedError:
                 self.close(reason='websocket closed')
 
+    def append_tab(self):
+        self._append_tab=True
+
+    def append_queue(self, message):
+        self._queue_message += message
+    
+    def clear_queue(self):
+        self._queue_message = ""
+
+    def on_flush(self):
+        if len(self._queue_message) > 0:
+            print("Message received " + self._queue_message)
+
     def on_write(self):
         logging.debug('worker {} on write'.format(self.id))
         
@@ -98,7 +116,6 @@ class Worker(object):
 
         data = ''.join(self.data_to_dst)
         logging.debug('{!r} to {}:{}'.format(data, *self.dst_addr))
-
         try:
             sent = self.chan.send(data)
         except (OSError, IOError) as e:

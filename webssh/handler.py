@@ -523,7 +523,6 @@ class IndexHandler(MixinHandler, tornado.web.RequestHandler):
             workers[worker.id] = worker
             self.loop.call_later(options.delay, recycle_worker, worker)
             self.result.update(id=worker.id, encoding=worker.encoding)
-
         self.write(self.result)
 
 
@@ -532,7 +531,6 @@ class WsockHandler(MixinHandler, tornado.websocket.WebSocketHandler):
     def initialize(self, loop):
         super(WsockHandler, self).initialize(loop)
         self.worker_ref = None
-        self._message_queue = ''
 
     def open(self):
         self.src_addr = self.get_client_addr()
@@ -560,7 +558,6 @@ class WsockHandler(MixinHandler, tornado.websocket.WebSocketHandler):
 
     def on_message(self, message):
         logging.debug('{!r} from {}:{}'.format(message, *self.src_addr))
-        
         worker = self.worker_ref()
         if not worker:
             # The worker has likely been closed. Do not process.
@@ -577,7 +574,8 @@ class WsockHandler(MixinHandler, tornado.websocket.WebSocketHandler):
             return
 
         if ("\\u0003" in message):
-            self._message_queue=""
+            worker.on_flush()
+            worker.clear_queue()
         try:
             msg = json.loads(message)
         except JSONDecodeError:
@@ -597,10 +595,16 @@ class WsockHandler(MixinHandler, tornado.websocket.WebSocketHandler):
         if data and isinstance(data, UnicodeType):
             
             if data.endswith("\r"):
-                print("message is " + self._message_queue)
-                self._message_queue=""
+                worker.on_flush()
+                worker.clear_queue()
+            elif "\\t" in message:
+                worker.append_tab()
+                print("has a tab")
+            elif "\\u" in message:
+                print("skipping control character")
+                pass
             else:
-                self._message_queue+=data
+                worker.append_queue(data)
             worker.data_to_dst.append(data)
             worker.on_write()
 
@@ -611,4 +615,6 @@ class WsockHandler(MixinHandler, tornado.websocket.WebSocketHandler):
 
         worker = self.worker_ref() if self.worker_ref else None
         if worker:
+            worker.on_flush()
+            worker.clear_queue()
             worker.close(reason=self.close_reason)
