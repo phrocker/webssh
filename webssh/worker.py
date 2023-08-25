@@ -92,6 +92,7 @@ class Worker(object):
 
     def on_write(self):
         logging.debug('worker {} on write'.format(self.id))
+        
         if not self.data_to_dst:
             return
 

@@ -427,6 +427,7 @@ class IndexHandler(MixinHandler, tornado.web.RequestHandler):
 
         for command in commands:
             try:
+                print("COMMAND IS " + command)
                 _, stdout, _ = ssh.exec_command(command,
                                                 get_pty=True,
                                                 timeout=1)
@@ -531,6 +532,7 @@ class WsockHandler(MixinHandler, tornado.websocket.WebSocketHandler):
     def initialize(self, loop):
         super(WsockHandler, self).initialize(loop)
         self.worker_ref = None
+        self._message_queue = ''
 
     def open(self):
         self.src_addr = self.get_client_addr()
@@ -558,6 +560,7 @@ class WsockHandler(MixinHandler, tornado.websocket.WebSocketHandler):
 
     def on_message(self, message):
         logging.debug('{!r} from {}:{}'.format(message, *self.src_addr))
+        
         worker = self.worker_ref()
         if not worker:
             # The worker has likely been closed. Do not process.
@@ -573,6 +576,8 @@ class WsockHandler(MixinHandler, tornado.websocket.WebSocketHandler):
             self.close(reason='Worker closed')
             return
 
+        if ("\\u0003" in message):
+            self._message_queue=""
         try:
             msg = json.loads(message)
         except JSONDecodeError:
@@ -590,6 +595,12 @@ class WsockHandler(MixinHandler, tornado.websocket.WebSocketHandler):
 
         data = msg.get('data')
         if data and isinstance(data, UnicodeType):
+            
+            if data.endswith("\r"):
+                print("message is " + self._message_queue)
+                self._message_queue=""
+            else:
+                self._message_queue+=data
             worker.data_to_dst.append(data)
             worker.on_write()
 
